@@ -1,0 +1,44 @@
+# CMake build directory
+/build/
+/out/
+/CMakeFiles/
+/CMakeCache.txt
+/cmake_install.cmake
+/Makefile
+
+# Visual Studio Code settings
+.vscode/
+*.code-workspace
+
+# Compiled object files
+*.o
+*.obj
+*.lo
+*.a
+*.lib
+*.so
+*.dll
+*.dylib
+
+# Executables
+*.exe
+*.out
+*.app
+PLUTO  # your executable name, add if static
+
+# Backup and temp files
+*~
+*.swp
+*.bak
+*.tmp
+
+# Logs
+*.log
+
+# Unit test files
+Testing/
+test-output/
+
+# Other system files
+.DS_Store
+Thumbs.db
