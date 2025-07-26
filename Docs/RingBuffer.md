@@ -1,65 +1,62 @@
-LMAX Disruptor Paper Summary with Experimental Results
+# Event Bus Architecture Inspired by LMAX Disruptor
 
-🔍 High-Level Goals
+## Reference
+This document summarizes key insights from the LMAX Disruptor paper, which describes a high-performance alternative to bounded queues for exchanging data between concurrent threads. The architecture of `event_bus` is inspired by these principles.
 
-The LMAX Disruptor is a concurrency framework that eliminates the need for locks by using a pre-allocated ring buffer and memory barriers.
+---
 
-Traditional concurrent queues like blocking or linked queues suffer from high latency due to:
+## Key Points & Notes
 
-Frequent memory allocations
+### Why Not Traditional Queues?
+- **Queues between processes** can be as slow as SSD I/O operations, adding hundreds of microseconds of latency.
+- **Tightly coupled queues and logic** cause different system parts to compete for resources in multi-threaded environments, leading to contention and inefficiency.
+- **Queues mix responsibilities**: producing, consuming, and storing data, which is inefficient in multi-threaded systems.
 
-CAS (Compare-And-Swap) operations
+### LMAX System Highlights
+- **Order matching engine**, real-time risk management, and highly available in-memory transaction processing.
+- Achieved **25 million messages/second** and **latencies lower than 50 nanoseconds** (limit test).
 
-Memory barriers
+### Concurrency Concepts
+- **Mutual exclusion**: Ensures only one thread updates a resource at a time, preventing data corruption.
+- **Visibility of change**: Ensures that when one thread updates a resource, other threads can see the change.
+- **Mutual exclusion is costly**: Requires locking mechanisms, which are expensive, especially under contention.
 
-Cache line contention
+### Locking and Its Costs
+- **Locks**: Expensive due to OS arbitration and context switches, which can cause loss of cached data/instructions and slow down execution.
+- **Context switches**: When multiple threads compete for a lock, the OS suspends waiting threads, further degrading performance.
 
-The disruptor reduces these issues through mechanical sympathy—understanding and leveraging hardware features.
+### CAS (Compare-And-Swap) as an Alternative
+- **CAS is more efficient than locks** for updating single-word memory locations.
+- **How CAS works**: Atomically updates a value if it matches an expected old value; otherwise, the operation fails and must be retried.
+- **Advantages**: No kernel context switch needed, significantly more efficient than locks.
+- **Limitations**: Not free—requires the processor to lock its instruction pipeline and use memory barriers for visibility. Complex operations are hard to orchestrate and prove correct with CAS.
 
-🧠 Modern Processor Considerations
+### Modern Processor Behavior
+- **Out-of-order execution**: CPUs may execute instructions and memory stores out of order for performance.
+- **Memory barriers**: Used to ensure memory changes appear in the correct order when threads share state.
+- **Cache systems**: Modern CPUs use complex, coherent caches (like hash tables without chaining) to bridge the speed gap between CPU and memory.
+- **Store buffers**: CPUs write data to a fast buffer before main memory, allowing continued execution without waiting for slower memory writes.
+- **Invalidate queues**: In multi-core systems, when one core writes to memory, it must notify other cores to invalidate their cached copies (cache coherency). Invalidate queues allow quick acknowledgment of these messages for efficiency.
 
-Modern CPUs use store buffers to temporarily hold writes, enabling out-of-order execution.
+---
 
-However, synchronization primitives like CAS and memory barriers force the CPU to flush the store buffer, incurring high performance costs.
+## Summary Table
 
-Volatile writes on their own do not require flushing the store buffer (as CAS does), but still impose memory ordering restrictions depending on the CPU architecture.
+| Mechanism         | Pros                                      | Cons/Limitations                              |
+|-------------------|-------------------------------------------|-----------------------------------------------|
+| Locks             | Simple, general-purpose                   | Expensive under contention, context switches  |
+| CAS               | Efficient for simple updates, no context switch | Hard for complex logic, not free, needs retries |
+| Queues            | Familiar, easy to use                     | Inefficient for high-performance concurrency  |
 
-By assigning each thread its own slot in the ring buffer and ensuring single-writer discipline, the disruptor avoids CAS on the fast path.
+---
 
-This leads to fewer memory barriers, reduced cache line bouncing, and lower latency under contention.
+## Notes
 
-🏎️ Performance Takeaways
+- For high-performance, low-latency systems, avoid traditional queues and locks where possible.
+- Use CAS for simple atomic updates, but be cautious with complex logic.
+- Understand and leverage modern CPU features (caches, store buffers, memory barriers) for optimal concurrency.
 
-Both locks and CAS induce store buffer flushes and memory fences, impacting performance.
+---
 
-CAS is cheaper than locks but still incurs significant overhead.
-
-The disruptor design shows that avoiding contention entirely is better than synchronizing efficiently.
-
-Hardware-aware programming can significantly reduce latency by avoiding shared memory hotspots.
-
-⚙️ Experimental Results (Lock vs CAS vs Volatile vs No Sync)
-
-Single thread (no sync):         122 ms
-Single thread with lock:        5571 ms
-Two threads with lock:         24952 ms
-Single thread with CAS:         2206 ms
-Two threads with CAS:           3958 ms
-Single thread with volatile:     136 ms
-
-🔍 Interpretation
-
-No sync (single-thread): Fastest—no synchronization overhead.
-
-Lock (single-thread): Introduces overhead even without contention due to mutex operations.
-
-Lock (two-thread): Worst performance due to contention, context switching, and kernel involvement.
-
-CAS (single-thread): Overhead from atomic instructions and memory fencing.
-
-CAS (two-thread): Better than lock but slower due to contention and store buffer flushes.
-
-Volatile (single-thread): Slight memory ordering cost, but still very efficient; not safe for multiple writers.
-
-These results affirm the Disruptor’s design: minimize synchronization costs by structuring memory access and control flow to eliminate shared mutable state across threads.
-- 
+**Reference:**  
+LMAX Disruptor: High performance alternative to bounded queues for exchanging data between
